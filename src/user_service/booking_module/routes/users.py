@@ -49,11 +49,6 @@ def create_user():
         return jsonify({'error': str(e)}), 500
 
 
-@users_bp.route('/test', methods=['GET'])
-def test():
-    return jsonify({'message': 'Test succeeded!'}), 200
-
-
 @users_bp.route('/', methods=['GET'])
 @jwt_required
 def get_user_info():

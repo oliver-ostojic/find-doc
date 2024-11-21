@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from mongodb_connection import test_connection
 from booking_module.routes.users import users_bp
 from booking_module.routes.provider_schedules import provider_schedules_bp
+from auth_module.auth_routes import auth_bp
 import os
 
 
@@ -18,6 +19,9 @@ def create_app():
     # Register blueprints
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(provider_schedules_bp, url_prefix='/provider_schedules')
+    app.register_blueprint(auth_bp, url_prefix='/auth')
+
+    print(app.url_map)
     return app
 
 

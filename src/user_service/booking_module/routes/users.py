@@ -1,12 +1,16 @@
-import os
+import bcrypt
 from bson.objectid import ObjectId, InvalidId
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from pydantic import ValidationError
-from user_service.mongodb_connection import users_collection, provider_schedules_collection, client
+from mongodb_connection import users_collection, provider_schedules_collection, client
 from ..models.appointment import Appointment
 from ..models.user import User
 from ..models.schedule import Schedule
 from dotenv import load_dotenv
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+from auth_module.middleware.jwt_validation import jwt_required
 
 # Load environment variables
 load_dotenv()
@@ -23,6 +27,15 @@ def create_user():
         user_data = request.get_json()
         if not user_data:
             return jsonify({'message': 'Missing or invalid JSON data'}), 400
+        # Extract plain-text password
+        plain_password = user_data.pop('password', None)
+        if not plain_password:
+            return jsonify({'message': 'Missing password'}), 400
+        # Hash the password
+        hashed_password = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
+        # Add the hashed_password to user_data
+        user_data['hashed_password'] = hashed_password.decode('utf-8')
+        # Validate and create the user object
         user = User(**user_data)
         # Convert Pydantic model to a dict
         user_dict = user.model_dump()
@@ -36,8 +49,18 @@ def create_user():
         return jsonify({'error': str(e)}), 500
 
 
-@users_bp.route('/<user_id>', methods=['GET'])
-def get_user_info(user_id):
+@users_bp.route('/test', methods=['GET'])
+def test():
+    return jsonify({'message': 'Test succeeded!'}), 200
+
+
+@users_bp.route('/', methods=['GET'])
+@jwt_required
+def get_user_info():
+    # Get user_id from token
+    user_id = g.user.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized: Missing user_id in token'}), 403
     try:
         user_data = users_collection.find_one({'_id': ObjectId(user_id)})
     except (InvalidId, ValueError):
@@ -49,8 +72,14 @@ def get_user_info(user_id):
         return jsonify({'message': 'User not found'}), 404
 
 
-@users_bp.route('/<user_id>/appointment', methods=['POST'])
-def book_appointment(user_id):
+@users_bp.route('/appointment', methods=['POST'])
+@jwt_required
+def book_appointment():
+    # Get user_id from token
+    user_id = g.user.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized: Missing user_id in token'}), 403
+
     # Extract data from the request body
     data = request.get_json()
     if not data:
@@ -82,19 +111,19 @@ def book_appointment(user_id):
             if not user:
                 return jsonify({'message': 'User not found'}), 404
             # Fetch the provider's schedule
-            provider_schedule_dict = provider_schedules_collection.find_one({'provider_id': provider_id},
+            provider_schedule_dict = provider_schedules_collection.find_one({'provider_id': int(provider_id)},
                                                                             session=session)
+            if not provider_schedule_dict:
+                return jsonify({'message': 'Provider schedule not found'}), 404
             # Covert dict to object
             provider_schedule = Schedule(**provider_schedule_dict)
             # Check in case provider_schedule does not exist
-            if not provider_schedule:
-                return jsonify({'message': 'Provider schedule not found'}), 404
             # Check that the slot is still available in the schedule
             available = provider_schedule.is_slot_available(start_datetime)
             if not available:
                 return jsonify({'message': 'Slot is not available'}), 404
             # Update schedule
-            result = provider_schedules_collection.update_one({'provider_id': provider_id},
+            result = provider_schedules_collection.update_one({'provider_id': int(provider_id)},
                                                               {'$set': {'availability.$[slot].is_booked': True}},
                                                               array_filters=[{'slot.start_datetime': start_datetime}],
                                                               session=session)
@@ -114,8 +143,13 @@ def book_appointment(user_id):
             return jsonify({'error': str(e)}), 500
 
 
-@users_bp.route('/<user_id>/appointment/<apt_id>', methods=['DELETE'])
-def cancel_appointment(user_id, apt_id):
+@users_bp.route('/appointment/<apt_id>', methods=['DELETE'])
+@jwt_required
+def cancel_appointment(apt_id):
+    # Get user_id from token
+    user_id = g.user.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized: Missing user_id in token'}), 403
     # Proceed with canceling appointment logic
     with client.start_session() as session:
         session.start_transaction()

@@ -1,7 +1,7 @@
 import os
 from bson.objectid import InvalidId
 from flask import Blueprint, jsonify
-from user_service.mongodb_connection import provider_schedules_collection, client
+from mongodb_connection import provider_schedules_collection, client
 from dotenv import load_dotenv
 
 # Load environment variables

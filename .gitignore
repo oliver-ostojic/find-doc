@@ -1,4 +1,18 @@
+# Ignore all virtual environments
 .venv/
+venv/
+src/user_service/venv/
+
+# Ignore Python bytecode and cache
 __pycache__/
-.idea/
+*.pyc
+*.pyo
+
+# Ignore environment variables and sensitive files
+.env
 src/user_service/.env
+
+# Ignore IDE-specific files
+.idea/
+.vscode/
+*.iml

@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, g
-from auth_module.middleware.jwt_validation import jwt_required
+from user_service.auth_module.middleware.jwt_validation import jwt_required
 
 gateway_bp = Blueprint('gateway_bp', __name__)
 
